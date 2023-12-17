@@ -88,6 +88,7 @@ var (
 	experimentalVar     bool
 	skipSELinuxOpts     bool
 	eventBufferLength   uint64
+	daemonLogLevel      uint64
 )
 
 var supportedHooks = []string{"auto", "crio", "podinformer", "nri", "fanotify", "fanotify+ebpf"}
@@ -171,6 +172,10 @@ func init() {
 		"events-buffer-length", "",
 		16384,
 		"The events buffer length. A low value could impact horizontal scaling.")
+	deployCmd.PersistentFlags().Uint64VarP(
+		&daemonLogLevel,
+		"daemon-log-level", "", 0, "Set the ig-k8s log level. 0=info, 1=debug, 2=trace")
+	fmt.Println("Deploy Conmmand Init")
 	rootCmd.AddCommand(deployCmd)
 }
 
@@ -416,7 +421,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		isPullSecretPresent = true
 	}
 
-	for _, object := range objects {
+	fmt.Println("\n")
+	for k, object := range objects {
+		fmt.Println("====================================================================================================")
+		fmt.Println("                    Object number ", k)
+		fmt.Println("....................................................................................................")
 		var currentGadgetDS *appsv1.DaemonSet
 
 		daemonSet, handlingDaemonSet := object.(*appsv1.DaemonSet)
@@ -481,6 +490,8 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 					gadgetContainer.Env[i].Value = strconv.FormatBool(value)
 				case "EVENTS_BUFFER_LENGTH":
 					gadgetContainer.Env[i].Value = strconv.FormatUint(eventBufferLength, 10)
+				case "GADGET_TRACER_MANAGER_LOG_LEVEL":
+					gadgetContainer.Env[i].Value = strconv.FormatUint(daemonLogLevel, 10)
 				}
 			}
 
