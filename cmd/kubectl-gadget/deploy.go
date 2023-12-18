@@ -555,14 +555,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			rBinding.Namespace = gadgetNamespace
 		}
 
-		if printOnly {
-			bytes, err := yaml.Marshal(object)
-			if err != nil {
-				return fmt.Errorf("problem while marshaling object: %w", err)
-			}
-			fmt.Printf("%s---\n", bytes)
-			continue
+		bytes, err := yaml.Marshal(object)
+		if err != nil {
+			return fmt.Errorf("problem while marshaling object: %w", err)
 		}
+		fmt.Printf("%s---\n", bytes)
 
 		obj, err := createOrUpdateResource(dynamicClient, mapper, object)
 		if err != nil {
