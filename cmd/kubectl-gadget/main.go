@@ -67,6 +67,7 @@ func main() {
 	// default. Make sure we don't do this when certain commands are run
 	// (as they just don't need it or imply that there are no nodes to
 	// contact, yet).
+	isStatus := false
 	skipInfo := false
 	isHelp := false
 	isVersion := false
@@ -78,16 +79,19 @@ func main() {
 			}
 		}
 
+		isStatus = isStatus || arg == "status"
 		isVersion = isVersion || arg == "version"
 		isDeployUndeploy = isDeployUndeploy || arg == "deploy" || arg == "undeploy"
 		isHelp = isHelp || arg == "--help" || arg == "-h"
 	}
-
+	log.Infof("isHelp: %v, isVersion: %v, isDeployUndeploy: %v, isStatus: %v", isHelp, isVersion, isDeployUndeploy, isStatus)
 	grpcRuntime = grpcruntime.New(grpcruntime.WithConnectUsingK8SProxy)
 	runtimeGlobalParams = grpcRuntime.GlobalParamDescs().ToParams()
+	log.Infof("runtimeGlobalParams: %v", runtimeGlobalParams)
 	common.AddFlags(rootCmd, runtimeGlobalParams, nil, grpcRuntime)
 	grpcRuntime.Init(runtimeGlobalParams)
 	config, err := utils.KubernetesConfigFlags.ToRESTConfig()
+	// log.Infof("config: %+v", config)
 	if err != nil {
 		log.Fatalf("Creating RESTConfig: %s", err)
 	}
@@ -104,7 +108,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !isHelp && !isDeployUndeploy && !runtimeGlobalParams.Get(grpcruntime.ParamGadgetNamespace).IsSet() {
+	if !isStatus && !isHelp && !isDeployUndeploy && !runtimeGlobalParams.Get(grpcruntime.ParamGadgetNamespace).IsSet() {
+		log.Info("No gadget namespace set, trying to find one")
 		gadgetNamespaces, err := utils.GetRunningGadgetNamespaces()
 		if err != nil {
 			log.Fatalf("Searching for running Inspektor Gadget instances: %s", err)
@@ -114,6 +119,8 @@ func main() {
 		case 0:
 			if !isVersion {
 				log.Fatalf("No running Inspektor Gadget instances found")
+			} else {
+				log.Info("No running Inspektor Gadget instances found")
 			}
 		case 1:
 			// Exactly one running gadget instance found, use it
@@ -122,6 +129,8 @@ func main() {
 			// Multiple running gadget instances found, error out
 			log.Fatalf("Multiple running Inspektor Gadget instances found in following namespaces: %v", gadgetNamespaces)
 		}
+	} else {
+		log.Info("Skipping gadget namespace search")
 	}
 
 	if !skipInfo {
@@ -133,12 +142,17 @@ func main() {
 	gadgetNamespace := runtimeGlobalParams.Get(grpcruntime.ParamGadgetNamespace).AsString()
 
 	hiddenColumnTags := []string{"runtime"}
+	log.Info("Adding commands from registry")
 	common.AddCommandsFromRegistry(rootCmd, grpcRuntime, hiddenColumnTags)
 
 	// Advise and traceloop category is still being handled by CRs for now
+	log.Info("Adding advise and traceloop commands")
 	rootCmd.AddCommand(advise.NewAdviseCmd(gadgetNamespace))
+	log.Info("Adding traceloop command")
 	rootCmd.AddCommand(NewTraceloopCmd(gadgetNamespace))
+	log.Info("Adding script command")
 	rootCmd.AddCommand(common.NewSyncCommand(grpcRuntime))
+	rootCmd.AddCommand(common.NewStatusCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
